@@ -89,7 +89,7 @@ export async function handleImageGenerationCore({
     } catch (error) {
       const errMsg = formatProviderError(error, provider, model, HTTP_STATUS.BAD_GATEWAY);
       log?.debug?.("IMAGE", `Executor error: ${errMsg}`);
-      return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg);
+      return createErrorResult(HTTP_STATUS.BAD_GATEWAY, errMsg, undefined, null, error.modelUnavailable);
     }
   }
 
@@ -157,10 +157,10 @@ export async function handleImageGenerationCore({
   }
 
   if (!providerResponse.ok) {
-    const { statusCode, message } = await parseUpstreamError(providerResponse);
+    const { statusCode, message, modelUnavailable } = await parseUpstreamError(providerResponse);
     const errMsg = formatProviderError(new Error(message), provider, model, statusCode);
     log?.debug?.("IMAGE", `Provider error: ${errMsg}`);
-    return createErrorResult(statusCode, errMsg);
+    return createErrorResult(statusCode, errMsg, undefined, null, modelUnavailable);
   }
 
   // Parse provider response — adapter may override (codex SSE / async polling / binary)

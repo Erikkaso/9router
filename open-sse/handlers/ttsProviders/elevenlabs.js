@@ -1,5 +1,6 @@
 // ElevenLabs TTS — voice id with optional model_id prefix
 import { Buffer } from "node:buffer";
+import { annotateModelError } from "./_base.js";
 
 const VOICES_TTL = 24 * 60 * 60 * 1000;
 const _voicesCache = new Map(); // by API key
@@ -39,7 +40,7 @@ export default {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err?.detail?.message || `ElevenLabs TTS failed: ${res.status}`);
+      throw annotateModelError(new Error(err?.detail?.message || `ElevenLabs TTS failed: ${res.status}`), res.status, err);
     }
     const buf = await res.arrayBuffer();
     if (buf.byteLength < 1024) throw new Error("ElevenLabs TTS returned empty audio");

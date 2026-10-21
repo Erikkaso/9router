@@ -1,5 +1,11 @@
 // Shared TTS helpers
 import { Buffer } from "node:buffer";
+import { isDeprecatedModelError } from "../../services/accountFallback.js";
+
+// Keep upstream classification when TTS wraps every provider failure as a 502.
+export function annotateModelError(error, status, details) {
+  return Object.assign(error, { modelUnavailable: isDeprecatedModelError(status, { error: details, message: error.message }) });
+}
 
 export const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
 
@@ -22,7 +28,7 @@ export async function throwUpstreamError(res) {
     const parsed = JSON.parse(text);
     msg = parsed?.error?.message || parsed?.message || parsed?.detail?.message || (typeof parsed?.detail === "string" ? parsed.detail : null) || text || msg;
   } catch { msg = text || msg; }
-  throw new Error(msg);
+  throw annotateModelError(new Error(msg), res.status, text);
 }
 
 // Parse `model` string as "modelId/voiceId" — match against known model list (longest prefix wins)

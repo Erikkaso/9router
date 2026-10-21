@@ -137,13 +137,14 @@ export async function handleChat(request, clientRawRequest = null) {
       body,
       models: augmentedModels,
       handleSingleModel: withCapacityAdapterStripping(
-        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+        (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, settings.fallbackOnDeprecatedModels === true),
         adapterAdded
       ),
       log,
       comboName: modelStr,
       comboStrategy,
-      comboStickyLimit
+      comboStickyLimit,
+      fallbackOnDeprecatedModels: settings.fallbackOnDeprecatedModels === true,
     });
   }
 
@@ -172,7 +173,7 @@ export async function handleChat(request, clientRawRequest = null) {
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, requestedModel = null, fallbackOnDeprecatedModels = false) {
   const modelInfo = await getModelInfo(modelStr);
 
   // If provider is null, this might be a combo name - check and handle
@@ -217,13 +218,14 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         body,
         models: augmentedModels,
         handleSingleModel: withCapacityAdapterStripping(
-          (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+          (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, null, chatSettings.fallbackOnDeprecatedModels === true),
           adapterAdded
         ),
         log,
         comboName: modelStr,
         comboStrategy,
-        comboStickyLimit
+        comboStickyLimit,
+        fallbackOnDeprecatedModels: chatSettings.fallbackOnDeprecatedModels === true,
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });
@@ -323,6 +325,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     });
 
     if (result.success) return result.response;
+
+    // A removed combo model cannot recover by rotating credentials. Return its
+    // error to the existing combo loop, retaining structured provider recognition.
+    if (fallbackOnDeprecatedModels && result.modelUnavailable) {
+      return result.response;
+    }
 
     // Antigravity 409/429: refresh live quota to get exact resetAt before locking
     let quotaResetMs = null;

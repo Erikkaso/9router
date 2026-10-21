@@ -1,4 +1,28 @@
-import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS } from "../config/errorConfig.js";
+import { ERROR_RULES, BACKOFF_CONFIG, TRANSIENT_COOLDOWN_MS, DEPRECATED_MODEL_ERROR } from "../config/errorConfig.js";
+
+/** Recognize explicit model removal, independently of account retry/cooldown rules. */
+export function isDeprecatedModelError(status, error) {
+  if (!DEPRECATED_MODEL_ERROR.statuses.has(status)) return false;
+  const messages = [];
+  const codes = [];
+  const visit = (value, key = "message") => {
+    if (typeof value === "string") {
+      // Some executors retain the raw JSON body, optionally prefixed by [status].
+      try { visit(JSON.parse(value.replace(/^\[\d+\]:\s*/, ""))); return; } catch { /* plain text */ }
+      if (["code", "type", "reason", "status"].includes(key)) codes.push(value);
+      else if (["message", "error", "detail", "description"].includes(key)) messages.push(value);
+    } else if (Array.isArray(value)) {
+      for (const item of value) visit(item, key);
+    } else if (value && typeof value === "object") {
+      for (const [childKey, child] of Object.entries(value)) visit(child, childKey);
+    }
+  };
+  visit(error);
+  if (messages.some((message) => DEPRECATED_MODEL_ERROR.excluded.test(message)) ||
+      codes.some((code) => DEPRECATED_MODEL_ERROR.excludedCode.test(code))) return false;
+  return codes.some((code) => DEPRECATED_MODEL_ERROR.code.test(code)) ||
+    messages.some((message) => DEPRECATED_MODEL_ERROR.message.test(message));
+}
 
 /**
  * Calculate exponential backoff cooldown for rate limits (429)

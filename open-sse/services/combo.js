@@ -2,8 +2,8 @@
  * Shared combo (model combo) handling with fallback support
  */
 
-import { checkFallbackError, formatRetryAfter } from "./accountFallback.js";
-import { unavailableResponse } from "../utils/error.js";
+import { checkFallbackError, formatRetryAfter, isDeprecatedModelError } from "./accountFallback.js";
+import { unavailableResponse, getModelErrorClassification } from "../utils/error.js";
 import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { extractTextContent } from "../translator/formats/gemini.js";
 
@@ -315,9 +315,10 @@ export function isZeroContentResponse(data) {
  * @param {string} [options.comboName] - Name of the combo (for round-robin tracking)
  * @param {string} [options.comboStrategy] - Strategy: "fallback" or "round-robin"
  * @param {number|string} [options.comboStickyLimit=1] - Requests per combo model before switching
+ * @param {boolean} [options.fallbackOnDeprecatedModels=false] - Skip explicitly removed models without credential cooldown
  * @returns {Promise<Response>}
  */
-export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true }) {
+export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1, autoSwitch = true, fallbackOnDeprecatedModels = false }) {
   // Apply rotation strategy if enabled
   let rotatedModels = getRotatedModels(models, comboName, comboStrategy, comboStickyLimit);
 
@@ -336,9 +337,11 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
   let lastError = null;
   let earliestRetryAfter = null;
   let lastStatus = null;
+  const retiredModels = new Set();
 
   for (let i = 0; i < rotatedModels.length; i++) {
     const modelStr = rotatedModels[i];
+    if (retiredModels.has(modelStr)) continue;
     log.info("COMBO", `Trying model ${i + 1}/${rotatedModels.length}: ${modelStr}`);
 
     try {
@@ -370,9 +373,10 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
 
       // Extract error info from response
       let errorText = result.statusText || "";
+      let errorBody = null;
       let retryAfter = null;
       try {
-        const errorBody = await result.clone().json();
+        errorBody = await result.clone().json();
         errorText = errorBody?.error?.message || errorBody?.error || errorBody?.message || errorText;
         retryAfter = errorBody?.retryAfter || null;
       } catch {
@@ -390,7 +394,12 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
       }
 
       // Check if should fallback to next model
-      const { shouldFallback, cooldownMs } = checkFallbackError(result.status, errorText);
+      const modelUnavailable = fallbackOnDeprecatedModels === true &&
+        (getModelErrorClassification(result) ?? isDeprecatedModelError(result.status, errorBody || errorText));
+      if (modelUnavailable) retiredModels.add(modelStr);
+      const { shouldFallback, cooldownMs } = modelUnavailable
+        ? { shouldFallback: true, cooldownMs: 0 }
+        : checkFallbackError(result.status, errorText);
 
       if (!shouldFallback) {
         log.warn("COMBO", `Model ${modelStr} failed (no fallback)`, { status: result.status });

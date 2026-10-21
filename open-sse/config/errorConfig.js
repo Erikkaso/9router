@@ -41,6 +41,15 @@ export const TRANSIENT_COOLDOWN_MS = 30 * 1000;
 // Hard cap for provider-reported rate limit cooldown (e.g. codex resets_at can be 5-6h)
 export const MAX_RATE_LIMIT_COOLDOWN_MS = 30 * 60 * 1000;
 
+// Opt-in combo fallback only; these do not change credential cooldown rules.
+export const DEPRECATED_MODEL_ERROR = {
+  statuses: new Set([400, 404, 410, 422]),
+  code: /^model_(?:deprecated|deprecation|retired|sunset|not_found|removed|no_longer_available|no_longer_supported)$/i,
+  message: /\bmodel(?:\s+(?:[`'"][^`'"]+[`'"]|[\w.\/-]+))?\s+(?:(?:is|was|has been|(?:has )?reached(?: its)?)\s+)?(?:deprecated|deprecation|retired|sunset|removed|not found|does not exist|no longer (?:supported|available))\b|\bmodel_(?:deprecated|deprecation|retired|sunset|not_found)\b/i,
+  excluded: /\b(?:permissions?|unauthorized|forbidden|authentication|api[ _-]?key|access denied|not authorized|do not have access|don't have access|does not have access|not permitted|requires? access)\b|\b(?:field|parameter|property|argument|endpoint)\s+[`'"]?model\b|\bmodel\s+(?:field|parameter|property|argument|endpoint)\b|\b(?:for|to) (?:your|this|the) (?:account|organization|project|plan)\b/i,
+  excludedCode: /(?:authentication|permission|unauthorized|forbidden|access_denied|invalid_api_key|invalid_parameter)/i,
+};
+
 // Cooldown durations (ms)
 const COOLDOWN = {
   long: 2 * 60 * 1000,

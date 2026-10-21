@@ -59,18 +59,19 @@ export async function handleTts(request) {
     return handleComboChat({
       body,
       models: comboModels,
-      handleSingleModel: (b, m) => handleSingleModelTts(b, m, responseFormat, language, style),
+      handleSingleModel: (b, m) => handleSingleModelTts(b, m, responseFormat, language, style, settings.fallbackOnDeprecatedModels === true),
       log,
       comboName: modelStr,
       comboStrategy,
       comboStickyLimit,
+      fallbackOnDeprecatedModels: settings.fallbackOnDeprecatedModels === true,
     });
   }
 
   return handleSingleModelTts(body, modelStr, responseFormat, language, style);
 }
 
-async function handleSingleModelTts(body, modelStr, responseFormat, language, style) {
+async function handleSingleModelTts(body, modelStr, responseFormat, language, style, fallbackOnDeprecatedModels = false) {
   const modelInfo = await getModelInfo(modelStr);
   if (!modelInfo.provider) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid model format");
 
@@ -81,6 +82,7 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language, st
   if (!CREDENTIALED_PROVIDERS.has(provider)) {
     const result = await handleTtsCore({ provider, model, input: body.input, responseFormat, language, style });
     if (result.success) return result.response;
+    if (fallbackOnDeprecatedModels && typeof result.modelUnavailable === "boolean") return result.response;
     return errorResponse(result.status || HTTP_STATUS.BAD_GATEWAY, result.error || "TTS failed");
   }
 
@@ -107,6 +109,8 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language, st
     const result = await handleTtsCore({ provider, model, input: body.input, credentials, responseFormat, language, style });
 
     if (result.success) return result.response;
+
+    if (fallbackOnDeprecatedModels && result.modelUnavailable) return result.response;
 
     const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
     if (shouldFallback) {

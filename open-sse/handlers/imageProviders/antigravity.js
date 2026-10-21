@@ -2,6 +2,7 @@
 // envelope (project, model, requestType, sessionId) and auth headers.
 import { nowSec, sizeToAspectRatio } from "./_base.js";
 import { getExecutor } from "../../executors/index.js";
+import { isDeprecatedModelError } from "../../services/accountFallback.js";
 
 // Convert image input (data URI or raw base64) to Gemini inlineData part
 function resolveImageInput(input) {
@@ -66,7 +67,9 @@ export default {
 
     if (!result.response.ok) {
       const text = await result.response.text();
-      throw new Error(text || `HTTP ${result.response.status}`);
+      throw Object.assign(new Error(text || `HTTP ${result.response.status}`), {
+        modelUnavailable: isDeprecatedModelError(result.response.status, text),
+      });
     }
 
     return result.response.json();
