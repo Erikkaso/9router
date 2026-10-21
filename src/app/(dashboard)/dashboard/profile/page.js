@@ -1511,9 +1511,9 @@ export default function ProfilePage() {
 
             <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm sm:text-base">Fallback para modelos descontinuados</p>
+                <p className="font-medium text-sm sm:text-base">Fallback for deprecated models</p>
                 <p className="text-xs sm:text-sm text-text-muted">
-                  Tentar automaticamente o próximo modelo do Combo quando o modelo atual estiver descontinuado ou não estiver mais disponível.
+                  Automatically try the next model in the Combo when the current model is deprecated or no longer available.
                 </p>
               </div>
               <Toggle
